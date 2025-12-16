@@ -1,0 +1,29 @@
+semiconductors:
+  - NVDA
+  - AMD
+  - INTC
+  - AVGO
+  - QCOM
+  - TXN
+  - MRVL
+  - MU
+  - ON
+  - MCHP
+ai_software:
+  - MSFT
+  - GOOGL
+  - META
+  - ADBE
+  - CRM
+  - PLTR
+  - SNOW
+cloud_computing:
+  - AMZN
+  - MSFT
+  - GOOGL
+  - ORCL
+  - IBM
+quantum_computing:
+  - IONQ
+  - RGTI
+  - QUBT

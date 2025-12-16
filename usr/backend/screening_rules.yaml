@@ -1,0 +1,11 @@
+growth_tech_screen:
+  market_cap_min: 10.0      # Minimum Market Cap (Billions)
+  revenue_growth_yoy_min: 0.15 # Minimum Revenue Growth YoY (15%)
+  gross_margin_min: 0.40    # Minimum Gross Margin (40%)
+  pe_max: 60.0              # Maximum PE Ratio (Adjusted slightly higher for tech)
+  beta_max: 2.5             # (Optional) Maximum Beta for volatility control
+
+value_tech_screen:
+  market_cap_min: 5.0
+  pe_max: 25.0
+  dividend_yield_min: 0.02
