@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/mock_screener_service.dart';
 import '../models/stock_snapshot.dart';
+import 'stock_detail_screen.dart';
 
 class IndustryScreenerScreen extends StatefulWidget {
   const IndustryScreenerScreen({super.key});
@@ -178,9 +179,11 @@ class _IndustryScreenerScreenState extends State<IndustryScreenerScreen> {
                     ),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () {
-                      // Navigate to details (placeholder)
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Analyze ${stock.ticker} details...')),
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => StockDetailScreen(stock: stock),
+                        ),
                       );
                     },
                   ),
