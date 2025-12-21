@@ -17,6 +17,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
   Map<String, dynamic>? _quoteData;
   bool _isLoading = true;
   String? _error;
+  bool _isRateLimited = false;
 
   @override
   void initState() {
@@ -27,10 +28,22 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
   Future<void> _fetchRealData() async {
     try {
       // Fetch Company Overview and Quote from Alpha Vantage via Edge Function
+      // We run them sequentially to be nicer to the rate limit if needed, 
+      // but parallel is better for UX. Let's try parallel but handle errors gracefully.
+      
       final overviewFuture = _dataService.getCompanyOverview(widget.stock.ticker);
       final quoteFuture = _dataService.getGlobalQuote(widget.stock.ticker);
 
-      final results = await Future.wait([overviewFuture, quoteFuture]);
+      final results = await Future.wait([
+        overviewFuture.catchError((e) {
+          if (e.toString().contains('Rate Limit')) _isRateLimited = true;
+          return <String, dynamic>{};
+        }), 
+        quoteFuture.catchError((e) {
+          if (e.toString().contains('Rate Limit')) _isRateLimited = true;
+          return <String, dynamic>{};
+        })
+      ]);
       
       if (mounted) {
         setState(() {
@@ -38,6 +51,16 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
           _quoteData = results[1];
           _isLoading = false;
         });
+        
+        if (_isRateLimited) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('API Rate Limit (5 calls/min). Showing cached data.'),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 4),
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -52,7 +75,8 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
   @override
   Widget build(BuildContext context) {
     // Use real price if available, otherwise fallback to snapshot
-    final displayPrice = _quoteData != null && _quoteData!['05. price'] != null
+    final hasRealPrice = _quoteData != null && _quoteData!['05. price'] != null;
+    final displayPrice = hasRealPrice
         ? double.tryParse(_quoteData!['05. price']) ?? widget.stock.currentPrice
         : widget.stock.currentPrice;
 
@@ -64,6 +88,33 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
       appBar: AppBar(
         title: Text('${widget.stock.ticker} Analysis'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        actions: [
+          if (_isLoading)
+            const Padding(
+              padding: EdgeInsets.all(16.0),
+              child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+            )
+          else if (hasRealPrice)
+            const Padding(
+              padding: EdgeInsets.all(16.0),
+              child: Chip(
+                label: Text('LIVE', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                backgroundColor: Colors.red,
+                padding: EdgeInsets.zero,
+                visualDensity: VisualDensity.compact,
+              ),
+            )
+          else
+             const Padding(
+              padding: EdgeInsets.all(16.0),
+              child: Chip(
+                label: Text('CACHED', style: TextStyle(color: Colors.white, fontSize: 10)),
+                backgroundColor: Colors.grey,
+                padding: EdgeInsets.zero,
+                visualDensity: VisualDensity.compact,
+              ),
+            )
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
@@ -123,9 +174,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
             const SizedBox(height: 24),
             
             // Real Data / Description Section
-            if (_isLoading)
-              const Center(child: CircularProgressIndicator())
-            else if (_error != null)
+            if (_error != null)
               Container(
                 padding: const EdgeInsets.all(12),
                 color: Colors.red.shade50,
@@ -138,7 +187,23 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
                 ),
               )
             else if (_overviewData != null && _overviewData!.isNotEmpty)
-               _buildOverviewCard(context, _overviewData!),
+               _buildOverviewCard(context, _overviewData!)
+            else if (!_isLoading && _overviewData == null)
+               Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.orange.shade200),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.info_outline, color: Colors.orange),
+                    SizedBox(width: 8),
+                    Expanded(child: Text('Live company profile unavailable. Using cached metrics below.')),
+                  ],
+                ),
+              ),
 
             const SizedBox(height: 24),
 
@@ -172,7 +237,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
                       children: [
                         _buildMetricColumn(context, 'Trailing PE', _overviewData?['PERatio'] ?? widget.stock.trailingPE?.toStringAsFixed(1) ?? 'N/A'),
                         _buildMetricColumn(context, 'Beta', _overviewData?['Beta'] ?? widget.stock.beta?.toStringAsFixed(2) ?? 'N/A'),
-                        _buildMetricColumn(context, 'PEG Ratio', _overviewData?['PEG'] ?? 'N/A'), 
+                        _buildMetricColumn(context, 'PEG Ratio', _overviewData?['PEGRatio'] ?? 'N/A'), 
                       ],
                     ),
                   ],
@@ -191,7 +256,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
               ],
             ),
             const SizedBox(height: 16),
-            _buildAnalysisStep(context, '1. Data Fetcher', 'Completed', Icons.check_circle, Colors.green),
+            _buildAnalysisStep(context, '1. Data Fetcher', hasRealPrice ? 'Live Data Acquired' : 'Using Cached Data', Icons.check_circle, hasRealPrice ? Colors.green : Colors.orange),
             _buildAnalysisStep(context, '2. Valuation Engine', 'Processing DCF Model...', Icons.sync, Colors.orange),
             _buildAnalysisStep(context, '3. Scoring Engine', 'Pending', Icons.circle_outlined, Colors.grey),
             _buildAnalysisStep(context, '4. Report Generation', 'Pending', Icons.circle_outlined, Colors.grey),

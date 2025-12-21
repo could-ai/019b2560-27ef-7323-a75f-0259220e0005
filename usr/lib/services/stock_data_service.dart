@@ -13,7 +13,17 @@ class StockDataService {
       );
 
       final data = response.data;
+      
+      // Check for Rate Limit or API Note
       if (data is Map<String, dynamic>) {
+        if (data.containsKey('Note')) {
+          print('Alpha Vantage Rate Limit: ${data['Note']}');
+          throw Exception('API Rate Limit Exceeded (5 calls/min)');
+        }
+        if (data.containsKey('Information')) {
+           print('Alpha Vantage Info: ${data['Information']}');
+           throw Exception('API Limit: ${data['Information']}');
+        }
         if (data.containsKey('error')) {
           throw Exception(data['error']);
         }
@@ -35,13 +45,21 @@ class StockDataService {
       );
 
       final data = response.data;
-      if (data is Map<String, dynamic> && data.containsKey('Global Quote')) {
-        return data['Global Quote'];
+      
+      if (data is Map<String, dynamic>) {
+         if (data.containsKey('Note')) {
+          print('Alpha Vantage Rate Limit: ${data['Note']}');
+          throw Exception('API Rate Limit Exceeded (5 calls/min)');
+        }
+        if (data.containsKey('Global Quote')) {
+          return data['Global Quote'];
+        }
       }
       return {};
     } catch (e) {
       print('Error fetching quote: $e');
-      return {};
+      // Don't rethrow here to allow partial data loading, just return empty
+      return {}; 
     }
   }
 }
