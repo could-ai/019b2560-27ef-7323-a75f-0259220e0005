@@ -18,10 +18,6 @@ serve(async (req) => {
       throw new Error('Missing API Key')
     }
 
-    if (!symbol) {
-      throw new Error('Missing symbol')
-    }
-
     let url = ''
     if (endpoint === 'overview') {
       url = `https://www.alphavantage.co/query?function=OVERVIEW&symbol=${symbol}&apikey=${apiKey}`
@@ -31,22 +27,13 @@ serve(async (req) => {
       throw new Error('Invalid endpoint')
     }
 
-    console.log(`Fetching ${endpoint} for ${symbol}...`)
     const response = await fetch(url)
     const data = await response.json()
 
-    // Check for API limit message
-    if (data.Note && data.Note.includes("call frequency")) {
-      return new Response(JSON.stringify({ error: "API Rate Limit Exceeded. Please wait a minute." }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 429
-      })
-    }
-
     return new Response(JSON.stringify(data), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 200,
     })
-
   } catch (error) {
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
