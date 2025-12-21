@@ -14,6 +14,7 @@ class StockDetailScreen extends StatefulWidget {
 class _StockDetailScreenState extends State<StockDetailScreen> {
   final StockDataService _dataService = StockDataService();
   Map<String, dynamic>? _overviewData;
+  Map<String, dynamic>? _quoteData;
   bool _isLoading = true;
   String? _error;
 
@@ -25,11 +26,16 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
 
   Future<void> _fetchRealData() async {
     try {
-      // Fetch Company Overview from Alpha Vantage via Edge Function
-      final data = await _dataService.getCompanyOverview(widget.stock.ticker);
+      // Fetch Company Overview and Quote from Alpha Vantage via Edge Function
+      final overviewFuture = _dataService.getCompanyOverview(widget.stock.ticker);
+      final quoteFuture = _dataService.getGlobalQuote(widget.stock.ticker);
+
+      final results = await Future.wait([overviewFuture, quoteFuture]);
+      
       if (mounted) {
         setState(() {
-          _overviewData = data;
+          _overviewData = results[0];
+          _quoteData = results[1];
           _isLoading = false;
         });
       }
@@ -45,6 +51,15 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Use real price if available, otherwise fallback to snapshot
+    final displayPrice = _quoteData != null && _quoteData!['05. price'] != null
+        ? double.tryParse(_quoteData!['05. price']) ?? widget.stock.currentPrice
+        : widget.stock.currentPrice;
+
+    final displayChangePercent = _quoteData != null && _quoteData!['10. change percent'] != null
+        ? _quoteData!['10. change percent']
+        : '0.00%';
+
     return Scaffold(
       appBar: AppBar(
         title: Text('${widget.stock.ticker} Analysis'),
@@ -84,12 +99,24 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
                     ),
                   ],
                 ),
-                Text(
-                  '\$${widget.stock.currentPrice.toStringAsFixed(2)}',
-                  style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      '\$${displayPrice.toStringAsFixed(2)}',
+                      style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                    ),
+                    Text(
+                      displayChangePercent,
+                      style: TextStyle(
+                        color: (displayChangePercent.toString().contains('-')) ? Colors.red : Colors.green,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -116,7 +143,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
             const SizedBox(height: 24),
 
             // Snapshot Data Grid (From Screener)
-            Text('Snapshot Metrics (Cached)', style: Theme.of(context).textTheme.titleLarge),
+            Text('Key Metrics', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 16),
             Card(
               elevation: 2,
@@ -127,18 +154,24 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        _buildMetricColumn(context, 'Market Cap', '\$${widget.stock.marketCapB}B'),
-                        _buildMetricColumn(context, 'Rev Growth', '${(widget.stock.revenueGrowth * 100).toStringAsFixed(1)}%', 
-                          color: widget.stock.revenueGrowth > 0.15 ? Colors.green : null),
-                        _buildMetricColumn(context, 'Gross Margin', '${(widget.stock.grossMargin * 100).toStringAsFixed(1)}%'),
+                        _buildMetricColumn(context, 'Market Cap', _overviewData?['MarketCapitalization'] != null 
+                            ? '\$${(double.parse(_overviewData!['MarketCapitalization']) / 1000000000).toStringAsFixed(1)}B' 
+                            : '\$${widget.stock.marketCapB}B'),
+                        _buildMetricColumn(context, 'Rev Growth', _overviewData?['QuarterlyRevenueGrowthYOY'] != null
+                            ? '${(double.parse(_overviewData!['QuarterlyRevenueGrowthYOY']) * 100).toStringAsFixed(1)}%'
+                            : '${(widget.stock.revenueGrowth * 100).toStringAsFixed(1)}%', 
+                          color: Colors.green),
+                        _buildMetricColumn(context, 'Gross Margin', _overviewData?['GrossProfitTTM'] != null && _overviewData?['RevenueTTM'] != null
+                            ? '${((double.parse(_overviewData!['GrossProfitTTM']) / double.parse(_overviewData!['RevenueTTM'])) * 100).toStringAsFixed(1)}%'
+                            : '${(widget.stock.grossMargin * 100).toStringAsFixed(1)}%'),
                       ],
                     ),
                     const Divider(height: 32),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        _buildMetricColumn(context, 'Trailing PE', widget.stock.trailingPE?.toStringAsFixed(1) ?? 'N/A'),
-                        _buildMetricColumn(context, 'Beta', widget.stock.beta?.toStringAsFixed(2) ?? 'N/A'),
+                        _buildMetricColumn(context, 'Trailing PE', _overviewData?['PERatio'] ?? widget.stock.trailingPE?.toStringAsFixed(1) ?? 'N/A'),
+                        _buildMetricColumn(context, 'Beta', _overviewData?['Beta'] ?? widget.stock.beta?.toStringAsFixed(2) ?? 'N/A'),
                         _buildMetricColumn(context, 'PEG Ratio', _overviewData?['PEG'] ?? 'N/A'), 
                       ],
                     ),

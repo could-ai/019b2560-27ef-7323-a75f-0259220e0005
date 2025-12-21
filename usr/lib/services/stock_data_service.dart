@@ -12,10 +12,6 @@ class StockDataService {
         body: {'symbol': symbol, 'endpoint': 'overview'},
       );
 
-      if (response.status != 200) {
-        throw Exception('Failed to fetch data: ${response.status}');
-      }
-
       final data = response.data;
       if (data is Map<String, dynamic>) {
         if (data.containsKey('error')) {
