@@ -1,43 +1,57 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+const API_KEY = 'T2YL43ZJDEVJZDCP'; // User provided key
 
 serve(async (req) => {
+  // CORS headers
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  }
+
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
   try {
     const { symbol, endpoint } = await req.json()
-    const apiKey = Deno.env.get('ALPHA_VANTAGE_API_KEY')
-
-    if (!apiKey) {
-      throw new Error('Missing API Key')
+    
+    if (!symbol) {
+      return new Response(
+        JSON.stringify({ error: 'Symbol is required' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      )
     }
 
-    let url = ''
+    let func = '';
     if (endpoint === 'overview') {
-      url = `https://www.alphavantage.co/query?function=OVERVIEW&symbol=${symbol}&apikey=${apiKey}`
+      func = 'OVERVIEW';
     } else if (endpoint === 'quote') {
-      url = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${apiKey}`
+      func = 'GLOBAL_QUOTE';
     } else {
-      throw new Error('Invalid endpoint')
+      return new Response(
+        JSON.stringify({ error: 'Invalid endpoint. Use "overview" or "quote"' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      )
     }
 
-    const response = await fetch(url)
-    const data = await response.json()
+    const url = `https://www.alphavantage.co/query?function=${func}&symbol=${symbol}&apikey=${API_KEY}`;
+    console.log(`Fetching ${func} for ${symbol}...`);
 
-    return new Response(JSON.stringify(data), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 200,
-    })
+    const apiResponse = await fetch(url);
+    const data = await apiResponse.json();
+
+    console.log(`Alpha Vantage Response:`, JSON.stringify(data).substring(0, 200)); // Log start of response
+
+    return new Response(
+      JSON.stringify(data),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+    )
+
   } catch (error) {
-    return new Response(JSON.stringify({ error: error.message }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 400,
-    })
+    return new Response(
+      JSON.stringify({ error: error.message }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+    )
   }
 })
